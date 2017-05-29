@@ -104,6 +104,7 @@ function createDockerVolume {
 function main {
   createDockerVolume mongodb_volume
   createContainer manager managerNode mongodb_volume
+  createReplicaSet manger managerNode
 
 }
 
