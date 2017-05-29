@@ -9,15 +9,65 @@ function switchVM {
 
 # @params server container volume
 function createContainer {
-  # start container
-  docker run --name $1 -v $2:/data -d mongo --smallfiles
-
+  switchVM $1
+  addConfigFilesToContainer $2 $3
 }
 
 # @params container volume
 function addConfigFilesToContainer {
   echo 'Starting container '$1
 
+  # start container
+  docker run --name $1 -v $2:/data -d mongo --smallfiles
+
+  # create folders in container where config files will be stored
+  docker exec -i $1 bash -c 'mkdir /data/keyfile /data/admin'
+
+  # copy config files into created folders
+  docker cp config/admin.js $1:/data/admin/
+  docker cp config/replica.js $1:/data/admin/
+  docker cp config/mongo-keyfile $1:/data/keyfile/
+  docker cp config/movies.js $1:/data/admin
+
+  # stop docker container so it can be restarted with additional configs and settings
+  docker stop $1
+}
+
+function getHostIPs {
+  hosts=''
+  for host in manager workerA workerB
+  do
+      cmd='docker-machine ip '$host
+      hosts=$hosts' --add-host '$host':'$($cmd)
+  done
+
+  echo $hosts
+}
+
+# @params container volume
+function setupAndStartContainer{
+  port='27017:27017'
+  p='27017'
+  replSet='curriculumReplSet'
+  env='config/env'
+  storageEngine='wiredTiger'
+  hosts=$(getHostIPs)
+  keyfile='mongo-keyfile'
+
+
+  echo 'starting up container '$1
+
+  # start container with configs for security, replica set, port mapping, and hosts
+  docker run --name $1 --hostname $1 \
+  -v $2:/data \
+  $hosts \
+  --env-file $env \
+  -p $port \
+  -d mongo --smallfiles \
+  --keyFile /data/keyfile/$keyfile \
+  --replSet $replSet \
+  --storageEngine $storageEngine \
+  --port $p
 }
 
 
