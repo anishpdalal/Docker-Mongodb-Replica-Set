@@ -1,5 +1,6 @@
 # Step 1) - Create Docker Volume
 # Step 2) - Create Primary Member of Replica Set
+# Step 3) - Initialize Replica Set in Primary Member
 
 function switchVM {
   env='docker-machine env '$1
@@ -7,10 +8,11 @@ function switchVM {
   eval $($env)
 }
 
-# @params server container volume
+# @params vm container volume
 function createContainer {
   switchVM $1
   addConfigFilesToContainer $2 $3
+  setupAndStartContainer $2 $3
 }
 
 # @params container volume
@@ -46,7 +48,7 @@ function getHostIPs {
 }
 
 # @params container volume
-function setupAndStartContainer{
+function setupAndStartContainer {
   port='27017:27017'
   p='27017'
   replSet='curriculumReplSet'
@@ -71,6 +73,21 @@ function setupAndStartContainer{
   --port $p
 }
 
+# @params vm container
+function createReplicaSet {
+  switchVM $1
+  sleep 2
+  # Initialize replica set
+  docker exec -i $2 bash -c 'mongo < /data/admin/replica.js'
+  sleep 2
+  # Load in admin users
+  docker exec -i $2 bash -c 'mongo < /data/admin/admin.js'
+  # Command for checking status of the replica set
+  cmd='mongo -u $MONGO_REPLICA_ADMIN -p $MONGO_PASS_REPLICA --eval "rs.status()" --authenticationDatabase "admin"'
+  sleep 2
+  docker exec -i $2 bash -c "$cmd"
+
+}
 
 # @params volume
 function createDockerVolume {
@@ -86,6 +103,8 @@ function createDockerVolume {
 
 function main {
   createDockerVolume mongodb_volume
+  createContainer manager managerNode mongodb_volume
+
 }
 
 main
