@@ -92,17 +92,14 @@ function initializeReplicaSet {
 
 }
 
-# @params vm container
-function addReplicasInManagerNode {
+# @params manager_vm manager_container worker_vm
+function addToReplicaSet {
   # Add replicas to the manager node that is on the manager VM
   switchVM $1
-  for server in workerA workerB
-  do
-    rs="rs.add('$server:27017')"
-    cmd='mongo --eval "'$rs'" -u $MONGO_REPLICA_ADMIN -p $MONGO_PASS_REPLICA --authenticationDatabase="admin"'
-    sleep 2
-    docker exec -i $2 bash -c "$cmd"
-  done
+  rs="rs.add('$3:27017')"
+  cmd='mongo --eval "'$rs'" -u $MONGO_REPLICA_ADMIN -p $MONGO_PASS_REPLICA --authenticationDatabase="admin"'
+  sleep 2
+  docker exec -i $2 bash -c "$cmd"
 }
 
 # @params volume
