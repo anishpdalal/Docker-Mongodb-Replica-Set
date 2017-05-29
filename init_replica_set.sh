@@ -29,7 +29,8 @@ function addConfigFilesToContainer {
   docker cp config/mongo-keyfile $1:/data/keyfile/
   docker cp config/movies.js $1:/data/admin
 
-  # stop docker container so it can be restarted with additional configs and settings
+
+  # stop docker container so it can be restarted with additional configs and settings for authentication
   docker stop $1
 }
 
@@ -57,7 +58,7 @@ function setupAndStartContainer{
 
   echo 'starting up container '$1
 
-  # start container with configs for security, replica set, port mapping, and hosts
+  # start container with configs for authentication, replica set, port mapping, and hosts that it can reside in
   docker run --name $1 --hostname $1 \
   -v $2:/data \
   $hosts \
