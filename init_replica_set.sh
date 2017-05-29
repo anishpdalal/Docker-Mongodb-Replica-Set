@@ -1,6 +1,7 @@
 # Step 1) - Create Docker Volume
-# Step 2) - Create Primary Member of Replica Set
+# Step 2) - Create Primary/Manager Member of Replica Set
 # Step 3) - Initialize Replica Set in Primary Member
+# Step 4) - Create Worker Members of Replica Set
 
 function switchVM {
   env='docker-machine env '$1
@@ -74,7 +75,7 @@ function setupAndStartContainer {
 }
 
 # @params vm container
-function createReplicaSet {
+function initializeReplicaSet {
   switchVM $1
   sleep 2
   # Initialize replica set
@@ -104,7 +105,7 @@ function createDockerVolume {
 function main {
   createDockerVolume mongodb_volume
   createContainer manager managerNode mongodb_volume
-  createReplicaSet manger managerNode
+  initializeReplicaSet manger managerNode
 
 }
 
