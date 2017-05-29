@@ -106,7 +106,8 @@ function main {
   createDockerVolume mongodb_volume
   createContainer manager managerNode mongodb_volume
   initializeReplicaSet manger managerNode
-
+  createContainer workerA workerNodeA mongodb_volume
+  createContainer workerB workerNodeB mongodb_volume
 }
 
 main
