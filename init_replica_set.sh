@@ -1,11 +1,13 @@
 # Step 1) - Create Docker Volume
 # Step 2) - Create Primary/Manager Member of Replica Set
 # Step 3) - Initialize Replica Set in Primary Member
-# Step 4) - Create Worker Members of Replica Set
+# Step 4) - Create Worker Nodes of Replica Set
+# Step 5) - Add Worker VM Hosts to Replica Set within Primary Member
 
+# @params vm
 function switchVM {
   env='docker-machine env '$1
-  echo 'switched to $1'
+  echo 'switched to '$1
   eval $($env)
 }
 
@@ -88,6 +90,19 @@ function initializeReplicaSet {
   sleep 2
   docker exec -i $2 bash -c "$cmd"
 
+}
+
+# @params vm container
+function addReplicasInManagerNode {
+  # Add replicas to the manager node that is on the manager VM
+  switchVM $1
+  for server in workerA workerB
+  do
+    rs="rs.add('$server:27017')"
+    cmd='mongo --eval "'$rs'" -u $MONGO_REPLICA_ADMIN -p $MONGO_PASS_REPLICA --authenticationDatabase="admin"'
+    sleep 2
+    docker exec -i $2 bash -c "$cmd"
+  done
 }
 
 # @params volume
