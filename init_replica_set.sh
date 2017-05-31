@@ -6,8 +6,10 @@
 
 # @params vm
 function switchVM {
+  echo '..................................................'
+  echo 'Switching to '$1
+  echo '..................................................'
   env='docker-machine env '$1
-  echo 'switched to '$1
   eval $($env)
 }
 
@@ -16,27 +18,65 @@ function createContainer {
   switchVM $1
   addConfigFilesToContainer $2 $3
   setupAndStartContainer $2 $3
+  waitForMongodbToLoad $1
 }
+
+# @params vm
+function waitForMongodbToLoad {
+  ip=$(docker-machine ip $1)
+  # make tcp call
+  echo "Making TCP call to IP == $ip PORT == 27017"
+  waitFor $ip 27017
+}
+
+# @params ip port
+function waitFor {
+  echo ">>>>>>>>>>> waiting for mongodb"
+  while :
+  do
+    (echo > /dev/tcp/$1/$2) >/dev/null 2>&1
+    result=$?
+    if [[ $result -eq 0 ]]; then
+        echo "MongoDb is now available on $2 in $1"
+        sleep 3
+        break
+    fi
+    sleep 5
+  done
+}
+
+
 
 # @params container volume
 function addConfigFilesToContainer {
-  echo 'Starting container '$1
+  echo '..................................................'
+  echo 'Creating container '$1
+  echo '..................................................'
 
   # start container
   docker run --name $1 -v $2:/data -d mongo --smallfiles
 
   # create folders in container where config files will be stored
+  echo '..................................................'
+  echo 'Creating keyfile and admin directories within container '$1
   docker exec -i $1 bash -c 'mkdir /data/keyfile /data/admin'
+  echo '..................................................'
 
   # copy config files into created folders
   docker cp config/admin.js $1:/data/admin/
   docker cp config/replica.js $1:/data/admin/
   docker cp config/mongo-keyfile $1:/data/keyfile/
-  docker cp config/movies.js $1:/data/admin
 
+  # change folder owner
+  docker exec -i $1 bash -c 'chown -R mongodb:mongodb /data'
 
-  # stop docker container so it can be restarted with additional configs and settings for authentication
+  # stop and remove docker container so it can be restarted with additional configs and settings for authentication
+  echo '..................................................'
+  echo 'Stopping container '$1
   docker stop $1
+  echo 'Removing container '$1
+  docker rm $1
+  echo '..................................................'
 }
 
 function getHostIPs {
@@ -48,6 +88,7 @@ function getHostIPs {
   done
 
   echo $hosts
+
 }
 
 # @params container volume
@@ -60,9 +101,9 @@ function setupAndStartContainer {
   hosts=$(getHostIPs)
   keyfile='mongo-keyfile'
 
-
-  echo 'starting up container '$1
-
+  echo '..................................................'
+  echo 'Re-starting container with additional configs'$1
+  echo '..................................................'
   # start container with configs for authentication, replica set, port mapping, and hosts that it can reside in
   docker run --name $1 --hostname $1 \
   -v $2:/data \
@@ -81,11 +122,19 @@ function initializeReplicaSet {
   switchVM $1
   sleep 2
   # Initialize replica set
+  echo '..................................................'
+  echo 'Initialize replica set'
+  echo '..................................................'
   docker exec -i $2 bash -c 'mongo < /data/admin/replica.js'
   sleep 2
+  echo '..................................................'
+  echo 'Load in admin users'
+  echo '..................................................'
   # Load in admin users
   docker exec -i $2 bash -c 'mongo < /data/admin/admin.js'
+
   # Command for checking status of the replica set
+  echo 'checking for status of replica set..............'
   cmd='mongo -u $MONGO_REPLICA_ADMIN -p $MONGO_PASS_REPLICA --eval "rs.status()" --authenticationDatabase "admin"'
   sleep 2
   docker exec -i $2 bash -c "$cmd"
@@ -95,15 +144,21 @@ function initializeReplicaSet {
 # @params manager_vm manager_container worker_vm
 function addToReplicaSet {
   # Add replicas to the manager node that is on the manager VM
+  echo 'Adding worker host '$3' to replica set...............'
   switchVM $1
   rs="rs.add('$3:27017')"
   cmd='mongo --eval "'$rs'" -u $MONGO_REPLICA_ADMIN -p $MONGO_PASS_REPLICA --authenticationDatabase="admin"'
   sleep 2
+  waitForMongodbToLoad $3
   docker exec -i $2 bash -c "$cmd"
 }
 
 # @params volume
 function createDockerVolume {
+  echo '..................................................'
+  echo "Creating docker volume for persisting config files"
+  echo '..................................................'
+
   cmd=$(docker volume ls -q | grep $1)
   if [[ "$cmd" == $1 ]];
   then
@@ -112,14 +167,19 @@ function createDockerVolume {
     cmd='docker volume create --name '$1
     eval $cmd
   fi
+  echo '..................................................'
+  echo "Docker volume created"
+  echo '..................................................'
 }
 
 function main {
   createDockerVolume mongodb_volume
   createContainer manager managerNode mongodb_volume
-  initializeReplicaSet manger managerNode
+  initializeReplicaSet manager managerNode
   createContainer workerA workerNodeA mongodb_volume
   createContainer workerB workerNodeB mongodb_volume
+  addToReplicaSet manager managerNode workerA
+  addToReplicaSet manager managerNode workerB
 }
 
 main
